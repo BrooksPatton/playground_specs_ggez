@@ -21,7 +21,7 @@ impl Game {
 		let arena_width = 10000.0;
 		let arena_height = 5000.0;
 		let mut world = World::new();
-		let grid_spacing = 100.0;
+		let grid_spacing = 25.0;
 		let mut entities_count = 0;
 
 		world.register::<Location>();

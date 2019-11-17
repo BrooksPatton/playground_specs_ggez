@@ -2,10 +2,10 @@ use bbggez::ggez::{
 	event::EventHandler,
 	graphics,
 	nalgebra::{Point2, Vector2},
-	timer, Context, GameResult,
+	timer::{self, delta, duration_to_f64}, Context, GameResult,
 };
 use specs::{
-	storage, Builder, Component, DenseVecStorage, Dispatcher, DispatcherBuilder, NullStorage, Read,
+	Builder, Component, DenseVecStorage, Read,
 	ReadStorage, RunNow, System, World, WorldExt, Write, WriteStorage,
 };
 
@@ -27,8 +27,10 @@ impl Game {
 		world.register::<Location>();
 		world.register::<Size>();
 		world.register::<Color>();
-		world.register::<Velocity>();
-		world.insert(Camera::new());
+    world.register::<Velocity>();
+
+    world.insert(Camera::new());
+    world.insert(DeltaTime(0.016));
 
 		for count_width in 1..(arena_width / grid_spacing) as usize {
 			for count_height in 1..(arena_height / grid_spacing) as usize {
@@ -51,7 +53,7 @@ impl Game {
 			.with(Location::new(500.0, 500.0))
 			.with(Size::new(15.0))
 			.with(Color::new(1.0, 1.0, 0.0, 1.0))
-			.with(Velocity::new(0.1, 0.0))
+			.with(Velocity::new(10.0, 1.0))
 			.build();
 
 		entities_count += 1;
@@ -67,9 +69,15 @@ impl Game {
 
 impl EventHandler for Game {
 	fn update(&mut self, context: &mut Context) -> GameResult<()> {
-		let mut move_system = MoveSystem;
+    {
+      let dt = duration_to_f64(delta(context));
+      let mut delta = self.world.write_resource::<DeltaTime>();
+      *delta = DeltaTime(dt as f32);
+    }
 
-		move_system.run_now(&self.world);
+    let mut move_system = MoveSystem;
+    move_system.run_now(&self.world);
+
 		self.world.maintain();
 		Ok(())
 	}
@@ -92,6 +100,9 @@ impl EventHandler for Game {
 		graphics::present(context)
 	}
 }
+
+#[derive(Default)]
+struct DeltaTime(f32);
 
 #[derive(Component)]
 struct Location(Vector2<f32>);
@@ -201,16 +212,19 @@ struct MoveSystem;
 
 impl<'a> System<'a> for MoveSystem {
 	type SystemData = (
+    Read<'a, DeltaTime>,
 		ReadStorage<'a, Velocity>,
 		WriteStorage<'a, Location>,
 		Write<'a, Camera>,
 	);
 
-	fn run(&mut self, (velocity, mut location, mut camera): Self::SystemData) {
-		use specs::Join;
+	fn run(&mut self, (delta, velocity, mut location, mut camera): Self::SystemData) {
+    use specs::Join;
+
+    let delta = delta.0;
 
 		for (velocity, location) in (&velocity, &mut location).join() {
-			location.0 += velocity.0;
+			location.0 += velocity.0 * delta;
 			camera.x = location.0.x - camera.width / 2.0;
 			camera.y = location.0.y - camera.height / 2.0;
 		}
